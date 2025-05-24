@@ -1,0 +1,90 @@
+use crate::ast::{Statement, CreateTable, Insert, Select, ColumnDef};
+use crate::ast::{Value, Projection};
+
+grammar;
+
+// top‐level statements
+pub Statement: Statement = {
+    CreateTableStmt => Statement::CreateTable(Box::new(<>)),
+    InsertStmt      => Statement::Insert(Box::new(<>)),
+    SelectStmt      => Statement::Select(Box::new(<>)),
+};
+
+// CREATE TABLE tbl ( id INT , ... );
+CreateTableStmt: CreateTable = {
+    "CREATE" "TABLE" <ident:Ident> "(" <cl:ColumnDefList> ")" ";"?
+        => CreateTable { name: ident, cols: cl }
+};
+
+// one‐or‐more column defs
+ColumnDefList: Vec<ColumnDef> = {
+    ColumnDef => vec![<>],
+    <cl:ColumnDefList> "," <col:ColumnDef> => {
+        let mut v = cl;
+        v.push(col);
+        v
+    }
+};
+
+ColumnDef: ColumnDef = {
+    <ident:Ident> <t:Type> => ColumnDef { name: ident, data_type: t }
+};
+
+Type: String = {
+    "INT"  => "INT".to_string(),
+    "TEXT" => "TEXT".to_string()
+};
+
+// INSERT INTO tbl(col, ...) VALUES (val, ...);
+InsertStmt: Insert = {
+    "INSERT" "INTO" <i:Ident> "(" <il:IdentList> ")" "VALUES" "(" <vl:ValueList> ")" ";"?
+        => Insert { table: i, cols: il, values: vl }
+};
+
+// commas for identifiers
+IdentList: Vec<String> = {
+    Ident => vec![<>],
+    <il:IdentList> "," <i:Ident> => {
+        let mut v = il;
+        v.push(i);
+        v
+    }
+};
+
+// commas for values
+ValueList: Vec<Value> = {
+    Value => vec![<>],
+    <vl:ValueList> "," <v:Value> => {
+        let mut vec = vl;
+        vec.push(v);
+        vec
+    }
+};
+
+Value: Value = {
+    Num => Value::Int(<>.parse().unwrap()),
+    StringLit => Value::Text(<>.trim_matches('\'').to_string())
+};
+
+// SELECT * col,col FROM tbl;
+SelectStmt: Select = {
+    "SELECT" <sc:StarOrCols> "FROM" <i:Ident> ";"?
+        => Select { projection: sc, table: i }
+};
+
+StarOrCols: Projection = {
+    "*"          => Projection::All,
+    IdentList   => Projection::Columns(<>)
+};
+
+Ident: String = {
+    r#"[a-zA-Z_][a-zA-Z0-9_]*"# => String::from(<>).to_string()
+};
+
+Num: String = {
+    r#"[0-9]+"# => String::from(<>).to_string()
+};
+
+StringLit: String = {
+    r#"'[^']*'"# => String::from(<>).to_string()
+};
